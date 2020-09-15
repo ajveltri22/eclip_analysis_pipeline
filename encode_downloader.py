@@ -6,6 +6,7 @@ import pandas as pd
 from functools import reduce
 from multiprocessing import Pool, Manager
 from warnings import warn
+from time import time
 
 import utils
 
@@ -152,7 +153,7 @@ class EncodeExperimentDownloader:
                 queue.put(file_acc)
 
 
-def initialize_downloaders(num_cores, eclip_accessions):
+def initialize_downloaders(num_cores, eclip_accessions, working_directory):
     """
     Initializes instances of EncodeExperimentDownloader to gather information
     about the experiments from the ENCODE servers and calculate space necessary for download .
@@ -162,7 +163,7 @@ def initialize_downloaders(num_cores, eclip_accessions):
     :type eclip_accessions: list
     :return: starmap_async result containing EncodeExperimentDownloader instances.
     """
-    p = Pool(num_cores)
+    p = Pool(min(num_cores, 20))
     m = Manager()
     q = m.Queue()
 
@@ -170,11 +171,10 @@ def initialize_downloaders(num_cores, eclip_accessions):
     result = p.starmap_async(EncodeExperimentDownloader, args)
 
     while not result.ready():
-        clear_output(wait=True)
-        print("Initializing accession downloaders... {}/{} finished".format(str(q.qsize()), len(eclip_accessions)), end="\r")
+        print("Initializing accession downloaders... {}/{} finished".format(str(q.qsize()), len(eclip_accessions)),
+              end="\r")
         time.sleep(1)
 
-    clear_output(wait=True)
     initialized_downloaders = result.get()
     p.close()
 
@@ -191,7 +191,7 @@ def begin_download(num_cores, ):
         downloader_instance.download_fastqs(q)
         return downloader_instance
 
-    p = Pool(num_cores)
+    p = Pool(min(num_cores, 12))
     m = Manager()
     q = m.Queue()
 
@@ -208,6 +208,7 @@ def begin_download(num_cores, ):
     print("Done! {} finished downloading.".format(q.qsize()))
     return downloader_instances
 
+
 def build_file_table(downloader_instances):
     final_dict = {key: [] for key in downloader_instances[0].file_info_table.keys()}
     for instance in downloader_instances:
@@ -217,6 +218,7 @@ def build_file_table(downloader_instances):
     file_table = pd.DataFrame(data=final_dict)
     file_table.set_index("file_accession", inplace=True)
     return file_table
+
 
 def check_file_sizes(file_table):
     """
@@ -238,11 +240,21 @@ def check_file_sizes(file_table):
             redownload_list.append(row["eclip_experiment_accession"])
             file_accs.append(idx)
 
-    return zip(file_accs, redownload_list) #(file_accession, experiment_accession)
+    return zip(file_accs, redownload_list)  # (file_accession, experiment_accession)
 
-def main(num_cores, eclip_accessions):
+
+def main(num_cores, eclip_accessions, working_directory):
+    """
+    Initializes file downloaders and starts multithreaded downloading of files from ENCODE.
+    Returns a table with information on each accession/file and a list of downloaded files that don't
+    match the expected file size.
+    :param num_cores:
+    :param eclip_accessions:
+    :return:
+    """
     # initialize/download files
-    downloader_instances = initialize_downloaders(num_cores, eclip_accessions)
+    os.chdir(working_directory)
+    downloader_instances = initialize_downloaders(num_cores, eclip_accessions, working_directory)
     if utils.yn_input("Do you want to start downloading?"):
         downloader_instances = begin_download(downloader_instances)
     else:
@@ -252,4 +264,3 @@ def main(num_cores, eclip_accessions):
     bad_file_size_accs = check_file_sizes(file_table)
 
     return file_table, bad_file_size_accs
-
