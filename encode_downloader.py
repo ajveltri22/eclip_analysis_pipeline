@@ -5,8 +5,8 @@ import os
 import pandas as pd
 from functools import reduce
 from multiprocessing import Pool, Manager
-from warnings import warn
-from time import time
+import time
+import logging
 
 import utils
 
@@ -163,6 +163,7 @@ def initialize_downloaders(num_cores, eclip_accessions, working_directory):
     :type eclip_accessions: list
     :return: starmap_async result containing EncodeExperimentDownloader instances.
     """
+    logger = logging.getLogger(__name__)
     p = Pool(min(num_cores, 20))
     m = Manager()
     q = m.Queue()
@@ -171,22 +172,20 @@ def initialize_downloaders(num_cores, eclip_accessions, working_directory):
     result = p.starmap_async(EncodeExperimentDownloader, args)
 
     while not result.ready():
-        print("Initializing accession downloaders... {}/{} finished".format(str(q.qsize()), len(eclip_accessions)),
+        print("{}/{} finished".format(str(q.qsize()), len(eclip_accessions)),
               end="\r")
         time.sleep(1)
 
     initialized_downloaders = result.get()
     p.close()
-
-    print("Done! {} downloaders initialized.".format(len(eclip_accessions)))
     total_size = reduce(lambda amt, size_obj: amt + size_obj.total_download_size, initialized_downloaders, 0)
     num_files = reduce(lambda amt, size_obj: amt + size_obj.num_files, initialized_downloaders, 0)
-    print(num_files, "files, requiring", round(total_size / 1024 ** 3, 2), "GB")
+    logger.info(f"{num_files} files, requiring {round(total_size / 1024 ** 3, 2)} GB will be downloaded.")
 
     return initialized_downloaders
 
 
-def begin_download(num_cores, ):
+def begin_download(num_cores, downloader_instances):
     def activate_download(downloader_instance, q):
         downloader_instance.download_fastqs(q)
         return downloader_instance
@@ -195,17 +194,15 @@ def begin_download(num_cores, ):
     m = Manager()
     q = m.Queue()
 
-    args = [(downloader, q) for downloader in outputs]
+    args = [(downloader, q) for downloader in downloader_instances]
     result = p.starmap_async(activate_download, args)
 
     while not result.ready():
-        clear_output(wait=True)
         print("Running... {}/{} finished downloading".format(str(q.qsize()), num_files), end="\r")
         time.sleep(1)
 
     downloader_instances = result.get()
     p.close()
-    print("Done! {} finished downloading.".format(q.qsize()))
     return downloader_instances
 
 
@@ -228,6 +225,7 @@ def check_file_sizes(file_table):
     :param file_table:
     :return:
     """
+    logger = logging.getLogger(__name__)
     redownload_list = []
     file_accs = []
     for idx, row in file_table.iterrows():
@@ -235,7 +233,7 @@ def check_file_sizes(file_table):
         size = row["file_size"]
         disk_size = os.path.getsize(path)
         if disk_size != size:
-            warn("File {path} does not have expected size".format())
+            logger.warning(f"File {path} does not have expected size")
             print(idx, size, disk_size)
             redownload_list.append(row["eclip_experiment_accession"])
             file_accs.append(idx)
@@ -254,13 +252,21 @@ def main(num_cores, eclip_accessions, working_directory):
     """
     # initialize/download files
     os.chdir(working_directory)
+    logger = logging.getLogger(__name__)
+    logger.info("Initializing downloaders...")
     downloader_instances = initialize_downloaders(num_cores, eclip_accessions, working_directory)
+    logger.info(f"Done! {len(downloader_instances)} downloaders initialized.")
     if utils.yn_input("Do you want to start downloading?"):
-        downloader_instances = begin_download(downloader_instances)
+        logger.info("Downloading started...")
+        downloader_instances = begin_download(num_cores, downloader_instances)
+        logger.info(f"Done! {len(downloader_instances)} finished downloading.")
     else:
+        logger.info("Pipeline quit by user.")
         print("Quitting pipeline.")
         exit()
     file_table = build_file_table(downloader_instances)
+    file_table.to_csv("./file_table.csv")
+    logger.info("File table written to ./file_table.csv")
     bad_file_size_accs = check_file_sizes(file_table)
 
     return file_table, bad_file_size_accs
