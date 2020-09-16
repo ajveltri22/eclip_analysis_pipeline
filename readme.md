@@ -1,5 +1,5 @@
-#eCLIP rRNA analysis pipeline
-##Purpose
+# eCLIP rRNA analysis pipeline
+## Purpose
 The purpose of this pipeline is to process publicly accessible 
 eCLIP experiment data from the ENCODE project and analyze reads aligning to 
 human rRNA. This pipeline will download, trim, align, filter, and summarize
@@ -7,10 +7,10 @@ data for use in statistical analysis of ribosome binding sites. To speed the
 analysis of large datasets, this pipeline makes use of multiple CPUs where 
 possible.  
 
-##Hardware requirements
+## Hardware requirements
 
 
-##Software requirements
+## Software requirements
 - Python 3.6
 - [samtools](http://www.htslib.org/) 1.9
 - [HISAT2](http://daehwankimlab.github.io/hisat2/) 2.1.0
@@ -19,7 +19,7 @@ possible.
 [BBMap](https://jgi.doe.gov/data-and-tools/bbtools/) 38.44
 - 
 
-###Required Python modules
+### Required Python modules
 - Pandas 1.1.2
 - Numpy 1.19.2
 - Pysam 0.14.1
