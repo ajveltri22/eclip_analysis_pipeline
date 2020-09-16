@@ -4,11 +4,10 @@ import requests
 import os
 import pandas as pd
 from functools import reduce
-from multiprocessing import Pool, Manager
-import time
 import logging
-
 import utils
+
+import pickle
 
 
 class EncodeExperimentDownloader:
@@ -35,7 +34,7 @@ class EncodeExperimentDownloader:
     - create txt file with metadata??
     """
 
-    def __init__(self, eclip_encode_accession, queue=None):
+    def __init__(self, eclip_encode_accession):
         self.eclip_acc = eclip_encode_accession
         self.eclip_json = self.get_json(self.eclip_acc)
         self.get_properties_from_json(self.eclip_json)
@@ -57,8 +56,6 @@ class EncodeExperimentDownloader:
             "barcode_sequence": [],
         }
         self.create_table()
-        if queue is not None:
-            queue.put(self.eclip_acc)
 
     def get_json(self, encode_exp_accession):
         url = 'https://www.encodeproject.org/experiments/{acc}/'.format(acc=encode_exp_accession)
@@ -143,67 +140,23 @@ class EncodeExperimentDownloader:
         add_entries_for_exp("eclip", self.eclip_fastq_files_json)
         add_entries_for_exp("ctrl", self.ctrl_fastq_files_json)
 
-    def download_fastqs(self, queue=None):
+    def download_fastqs(self):
         for filepath, url, file_acc in zip(self.file_info_table["file_path"],
                                            self.file_info_table["url"],
                                            self.file_info_table["file_accession"]):
             with open(filepath, 'wb') as out_file:
                 out_file.write(requests.get(url).content)
-            if queue is not None:
-                queue.put(file_acc)
 
 
-def initialize_downloaders(num_cores, eclip_accessions, working_directory):
-    """
-    Initializes instances of EncodeExperimentDownloader to gather information
-    about the experiments from the ENCODE servers and calculate space necessary for download .
-    :param num_cores: number of cores to use for initializing downloaders
-    :type num_cores: int
-    :param eclip_accessions: list of ENCODE accessions
-    :type eclip_accessions: list
-    :return: starmap_async result containing EncodeExperimentDownloader instances.
-    """
-    logger = logging.getLogger(__name__)
-    p = Pool(min(num_cores, 20))
-    m = Manager()
-    q = m.Queue()
-
-    args = [(acc, q) for acc in eclip_accessions]
-    result = p.starmap_async(EncodeExperimentDownloader, args)
-
-    while not result.ready():
-        print("{}/{} finished".format(str(q.qsize()), len(eclip_accessions)),
-              end="\r")
-        time.sleep(1)
-
-    initialized_downloaders = result.get()
-    p.close()
-    total_size = reduce(lambda amt, size_obj: amt + size_obj.total_download_size, initialized_downloaders, 0)
-    num_files = reduce(lambda amt, size_obj: amt + size_obj.num_files, initialized_downloaders, 0)
-    logger.info(f"{num_files} files, requiring {round(total_size / 1024 ** 3, 2)} GB will be downloaded.")
-
-    return initialized_downloaders
+@utils.FunctionWrapperAddQueue()
+def initialize_downloaders(eclip_accession):
+    return EncodeExperimentDownloader(eclip_accession)
 
 
-def begin_download(num_cores, downloader_instances):
-    def activate_download(downloader_instance, q):
-        downloader_instance.download_fastqs(q)
-        return downloader_instance
-
-    p = Pool(min(num_cores, 12))
-    m = Manager()
-    q = m.Queue()
-
-    args = [(downloader, q) for downloader in downloader_instances]
-    result = p.starmap_async(activate_download, args)
-
-    while not result.ready():
-        print("Running... {}/{} finished downloading".format(str(q.qsize()), num_files), end="\r")
-        time.sleep(1)
-
-    downloader_instances = result.get()
-    p.close()
-    return downloader_instances
+@utils.FunctionWrapperAddQueue()
+def begin_download(downloader_instance):
+    downloader_instance.download_fastqs()
+    return downloader_instance
 
 
 def build_file_table(downloader_instances):
@@ -225,7 +178,7 @@ def check_file_sizes(file_table):
     :param file_table:
     :return:
     """
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger()
     redownload_list = []
     file_accs = []
     for idx, row in file_table.iterrows():
@@ -238,7 +191,7 @@ def check_file_sizes(file_table):
             redownload_list.append(row["eclip_experiment_accession"])
             file_accs.append(idx)
 
-    return zip(file_accs, redownload_list)  # (file_accession, experiment_accession)
+    return list(zip(file_accs, redownload_list))  # (file_accession, experiment_accession)
 
 
 def main(num_cores, eclip_accessions, working_directory):
@@ -246,23 +199,28 @@ def main(num_cores, eclip_accessions, working_directory):
     Initializes file downloaders and starts multithreaded downloading of files from ENCODE.
     Returns a table with information on each accession/file and a list of downloaded files that don't
     match the expected file size.
+    :param working_directory:
     :param num_cores:
     :param eclip_accessions:
     :return:
     """
     # initialize/download files
     os.chdir(working_directory)
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger()
+
     logger.info("Initializing downloaders...")
-    downloader_instances = initialize_downloaders(num_cores, eclip_accessions, working_directory)
-    logger.info(f"Done! {len(downloader_instances)} downloaders initialized.")
+    downloader_instances = utils.process_files_asynchronously(initialize_downloaders, num_cores, eclip_accessions)
+    total_size = reduce(lambda amt, size_obj: amt + size_obj.total_download_size, downloader_instances, 0)
+    num_files = reduce(lambda amt, size_obj: amt + size_obj.num_files, downloader_instances, 0)
+    logger.info(f"{num_files} files, requiring {round(total_size / 1024 ** 3, 2)} GB will be downloaded.")
+    pickle.dump(downloader_instances, open("./initialized_downloaders.pkl", "bw"))
     if utils.yn_input("Do you want to start downloading?"):
         logger.info("Downloading started...")
-        downloader_instances = begin_download(num_cores, downloader_instances)
+        downloader_instances = utils.process_files_asynchronously(begin_download, num_cores,
+                                                                  downloader_instances)
         logger.info(f"Done! {len(downloader_instances)} finished downloading.")
     else:
         logger.info("Pipeline quit by user.")
-        print("Quitting pipeline.")
         exit()
     file_table = build_file_table(downloader_instances)
     file_table.to_csv("./file_table.csv")
