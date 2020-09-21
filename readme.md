@@ -7,7 +7,7 @@ data for use in statistical analysis of ribosome binding sites. To speed the
 analysis of large datasets, this pipeline makes use of multiple CPUs where 
 possible.  
 **`eclip_pipeline.ipynb` contains the original code that is
-being refactored.**
+being refactored. `stats_analysis.Rmd` shows the original statistical analysis**
 
 ## Hardware requirements
 

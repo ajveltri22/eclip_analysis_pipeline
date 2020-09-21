@@ -1,0 +1,245 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+require(MASS)
+require(dplyr)
+```
+
+
+```{r}
+#aven vs control
+
+# Load table connecting an SRR run number to a descriptive sample name
+sample_names <- read.csv("./SRR_run_to_human_sample_name.csv", header=TRUE, row.names="X")
+
+#load normalized bin count data
+setwd("/Volumes/home/anthony/crac_analysis/")
+data <- read.csv("./18S_sliding_avg_pileup.csv", header=TRUE, row.names="X20nt_group")
+#transpose data to get bins on columns and samples on rows
+data.t <- as.data.frame.array(t(data)) 
+
+#next steps are done to filter out SRR runs that are neither AVEN samples, nor ~50 rRNA controls.
+#create a factor of the SRR names for control samples. 
+rRNA_ctrl_SRRs <- dplyr::filter(sample_names, grepl("^CRAC_rRNA_control", sample_names$Human_Name))$Run
+
+#create a factor of the SRR names for AVEN experimental samples. 
+aven_SRRs <- dplyr::filter(sample_names, grepl("^CRAC_Aven_\\d", sample_names$Human_Name, perl=TRUE))$Run
+
+#create dataframe containing only relevant SRRs for this comparison
+aven_and_ctrl_SRRs <- c(as.character(rRNA_ctrl_SRRs), as.character(aven_SRRs))
+aven_and_control_data <- data.t[aven_and_ctrl_SRRs,]
+num_bins <- length(aven_and_control_data)
+
+#create categorical variable column whether AVEN experimental sample or control
+aven_factor <- aven_and_ctrl_SRRs %in% aven_SRRs
+aven_factor <- replace(aven_factor, aven_factor == TRUE, "AVEN")
+aven_factor <- replace(aven_factor, aven_factor == FALSE, "CTRL")
+aven_and_control_data$sample <- aven_factor
+```
+
+
+```{r}
+# make glm.nb model for positions 
+pvals = numeric(num_bins)
+for (bin in 1:num_bins) {
+  if (sum(aven_and_control_data[,as.character(bin)]) > 0) {
+    #model <- glm.nb(aven_and_control_data[,as.character(bin)] ~ aven_and_control_data$sample)
+    #nullmodel <- glm.nb(aven_and_control_data[,as.character(bin)] ~ 1)
+    model <- glm(factor(aven_and_control_data$sample) ~ aven_and_control_data[,as.character(bin)], family=binomial(link = "logit"))
+    nullmodel <- glm(factor(aven_and_control_data$sample) ~ 1, family=binomial(link = "logit"))
+    p <- anova(model, nullmodel, test="Chisq")[["Pr(>Chi)"]][2]
+  } else {
+    p <- 1
+  }
+  pvals[bin] <- p
+  print(bin)
+}
+
+pvals <- p.adjust(pvals, method="BH")
+pvals
+
+write(pvals, "/Volumes/home/anthony/crac_analysis/aven_pvals.txt", 1)
+```
+
+```{r}
+#ski vs control
+
+# Load table connecting an SRR run number to a descriptive sample name
+sample_names <- read.csv("./SRR_run_to_human_sample_name.csv", header=TRUE, row.names="X")
+
+#load normalized bin count data
+data <- read.csv("./18S_average_pileup.csv", header=TRUE, row.names="X20nt_group")
+#transpose data to get bins on columns and samples on rows
+data.t <- as.data.frame.array(t(data)) 
+
+#next steps are done to filter out SRR runs that are neither AVEN samples, nor ~50 rRNA controls.
+#create a factor of the SRR names for control samples. 
+rRNA_ctrl_SRRs <- dplyr::filter(sample_names, grepl("^CRAC_rRNA_control", sample_names$Human_Name))$Run
+
+#create a factor of the SRR names for AVEN experimental samples. 
+ski_SRRs <- dplyr::filter(sample_names, grepl("^CRAC_Skiv2l_\\d", sample_names$Human_Name, perl=TRUE))$Run
+
+#create dataframe containing only relevant SRRs for this comparison
+ski_and_ctrl_SRRs <- c(as.character(rRNA_ctrl_SRRs), as.character(ski_SRRs))
+ski_and_control_data <- data.t[ski_and_ctrl_SRRs,]
+num_bins <- length(ski_and_control_data)
+
+#create categorical variable column whether AVEN experimental sample or control
+ski_factor <- ski_and_ctrl_SRRs %in% ski_SRRs
+ski_factor <- replace(ski_factor, ski_factor == TRUE, "SKIV2L")
+ski_factor <- replace(ski_factor, ski_factor == FALSE, "CTRL")
+ski_and_control_data$sample <- ski_factor
+```
+
+
+```{r}
+# make glm.nb model for positions 
+pvals = numeric(num_bins)
+for (bin in 1:num_bins) {
+  model <- glm.nb(ski_and_control_data[,as.character(bin)] ~ ski_and_control_data$sample)
+  nullmodel <- glm.nb(ski_and_control_data[,as.character(bin)] ~ 1)
+  p <- anova(model, nullmodel, test="Chisq")[["Pr(Chi)"]][2]
+  
+  pvals[bin] <- p
+}
+
+pvals <- p.adjust(pvals, method="BH")
+pvals
+
+write(pvals, "/Volumes/home/anthony/crac_analysis/ski_pvals.txt", 1)
+
+```
+
+```{r}
+#xrn1 vs control
+
+# Load table connecting an SRR run number to a descriptive sample name
+sample_names <- read.csv("./SRR_run_to_human_sample_name.csv", header=TRUE, row.names="X")
+
+#load normalized bin count data
+setwd("/Volumes/home/anthony/crac_analysis/")
+data <- read.csv("./18S_sliding_avg_pileup.csv", header=TRUE, row.names="X20nt_group")
+#transpose data to get bins on columns and samples on rows
+data.t <- as.data.frame.array(t(data)) 
+
+#next steps are done to filter out SRR runs that are neither AVEN samples, nor ~50 rRNA controls.
+#create a factor of the SRR names for control samples. 
+rRNA_ctrl_SRRs <- dplyr::filter(sample_names, grepl("^CRAC_rRNA_control", sample_names$Human_Name))$Run
+
+#create a factor of the SRR names for AVEN experimental samples. 
+xrn1_SRRs <- dplyr::filter(sample_names, grepl("^CRAC_Xrn1_\\d", sample_names$Human_Name, perl=TRUE))$Run
+#xrn1_SRRs <- xrn1_SRRs[-7]
+
+#create dataframe containing only relevant SRRs for this comparison
+xrn1_and_ctrl_SRRs <- c(as.character(rRNA_ctrl_SRRs), as.character(xrn1_SRRs))
+xrn1_and_control_data <- data.t[xrn1_and_ctrl_SRRs,]
+num_bins <- length(xrn1_and_control_data)
+
+#create categorical variable column whether AVEN experimental sample or control
+xrn1_factor <- xrn1_and_ctrl_SRRs %in% xrn1_SRRs
+xrn1_factor <- replace(xrn1_factor, xrn1_factor == TRUE, "XRN1")
+xrn1_factor <- replace(xrn1_factor, xrn1_factor == FALSE, "CTRL")
+xrn1_and_control_data$sample <- xrn1_factor
+```
+
+
+```{r}
+# make glm.nb model for positions 
+pvals = numeric(num_bins)
+for (bin in 1:num_bins) {
+  
+  if (sum(xrn1_and_control_data[,as.character(bin)]) > 0) {
+    #model <- glm.nb(xrn1_and_control_data[,as.character(bin)] ~ xrn1_and_control_data$sample)
+    #nullmodel <- glm.nb(xrn1_and_control_data[,as.character(bin)] ~ 1)
+    model <- glm(factor(xrn1_and_control_data$sample) ~ xrn1_and_control_data[,as.character(bin)], family=binomial(link = "logit"))
+    nullmodel <- glm(factor(xrn1_and_control_data$sample) ~ 1, family=binomial(link = "logit"))
+    p <- anova(model, nullmodel, test="Chisq")[["Pr(>Chi)"]][2] # use ["Pr(Chi)"] for nb model
+  } else {
+    p <- 1
+  }
+  pvals[bin] <- p
+  print(bin)
+}
+
+pvals <- p.adjust(pvals, method="BH")
+pvals
+
+write(pvals, "/Volumes/home/anthony/crac_analysis/xrn1_pvals.txt", 1)
+
+```
+
+
+```{r}
+#mtr4 vs control
+
+# Load table connecting an SRR run number to a descriptive sample name
+sample_names <- read.csv("./SRR_run_to_human_sample_name.csv", header=TRUE, row.names="X")
+
+#load normalized bin count data
+data <- read.csv("./18S_average_pileup.csv", header=TRUE, row.names="X20nt_group")
+#transpose data to get bins on columns and samples on rows
+data.t <- as.data.frame.array(t(data)) 
+
+#next steps are done to filter out SRR runs that are neither AVEN samples, nor ~50 rRNA controls.
+#create a factor of the SRR names for control samples. 
+rRNA_ctrl_SRRs <- dplyr::filter(sample_names, grepl("^CRAC_rRNA_control", sample_names$Human_Name))$Run
+
+#create a factor of the SRR names for AVEN experimental samples. 
+mtr4_SRRs <- dplyr::filter(sample_names, grepl("^CRAC_Mtr4_\\d", sample_names$Human_Name, perl=TRUE))$Run
+
+#create dataframe containing only relevant SRRs for this comparison
+mtr4_and_ctrl_SRRs <- c(as.character(rRNA_ctrl_SRRs), as.character(mtr4_SRRs))
+mtr4_and_control_data <- data.t[mtr4_and_ctrl_SRRs,]
+num_bins <- length(mtr4_and_control_data)
+
+#create categorical variable column whether AVEN experimental sample or control
+mtr4_factor <- mtr4_and_ctrl_SRRs %in% mtr4_SRRs
+mtr4_factor <- replace(mtr4_factor, mtr4_factor == TRUE, "MTR4")
+mtr4_factor <- replace(mtr4_factor, mtr4_factor == FALSE, "CTRL")
+mtr4_and_control_data$sample <- mtr4_factor
+```
+
+
+```{r}
+# make glm.nb model for positions 
+pvals = numeric(num_bins)
+for (bin in 1:num_bins) {
+  model <- glm.nb(mtr4_and_control_data[,as.character(bin)] ~ mtr4_and_control_data$sample)
+  nullmodel <- glm.nb(mtr4_and_control_data[,as.character(bin)] ~ 1)
+  p <- anova(model, nullmodel, test="Chisq")[["Pr(Chi)"]][2]
+  
+  pvals[bin] <- p
+}
+
+pvals <- p.adjust(pvals, method="BH")
+pvals
+
+write(pvals, "/Volumes/home/anthony/crac_analysis/mtr4_pvals.txt", 1)
+
+```
+
+
+
+```{r}
+library(ggplot2)
+col <- 51
+x_col_data <- xrn1_and_control_data[which(xrn1_and_control_data["sample"] == "XRN1"),col]
+c_col_data <- xrn1_and_control_data[which(xrn1_and_control_data["sample"] != "XRN1"),col]
+
+x_hist <- hist(x_col_data, col="red", breaks=50, xlim=c(0,2700), ylim=c(0,7))
+c_hist <- hist(c_col_data, breaks=100, xlim=c(0,2700), ylim=c(0,7), add=TRUE)
+```
+
+
+
+```{r}
+model <- glm.nb(aven_and_control_data[,as.character(1)] ~ aven_and_control_data$sample)
+nullmodel <- glm.nb(aven_and_control_data[,as.character(1)] ~ 1)
+
+a <- anova(nullmodel, model, test="Chisq")
+a
+```
+
