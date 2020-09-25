@@ -10,7 +10,7 @@ possible.
 being refactored. `stats_analysis.Rmd` shows the original statistical analysis**
 
 ## Hardware requirements
-
+Multiple cores are encouraged.
 
 ## Software requirements
 - Python 3.6
