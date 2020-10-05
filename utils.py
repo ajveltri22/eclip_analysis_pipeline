@@ -68,3 +68,14 @@ def process_files_asynchronously(func, num_cores, *args):
     p.close()
     print("\rDone. {}/{} processed.".format(str(q.qsize()), len(arg_list)))
     return result.get()
+
+def extract_contig_names(fasta_filepath):
+    # Obtain the first line of a FastA file
+    file = open(fasta_filepath, "r")
+    fasta_list = []
+
+    for line in file.readlines():
+        if line.startswith(">"):
+            fasta_list.append(line[1:].strip())
+    file.close()
+    return fasta_list
