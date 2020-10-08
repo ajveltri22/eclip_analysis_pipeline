@@ -76,6 +76,9 @@ def extract_contig_names(fasta_filepath):
 
     for line in file.readlines():
         if line.startswith(">"):
-            fasta_list.append(line[1:].strip())
+            new_line=line[1:].strip()
+            line_list=new_line.split()
+            first_word=line_list[0]
+            fasta_list.append(first_word)
     file.close()
     return fasta_list
