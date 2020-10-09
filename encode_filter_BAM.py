@@ -4,7 +4,7 @@ import os
 from multiprocessing import Pool, cpu_count
 from itertools import product
 
-def filter_reads(filepath, output_dir, contig_list=None):
+def filter_reads(filepath, output_dir):
     '''Given an input .bam filename and a output directory path, filters reads for a minimum alignment length of 20 and
     no gaps. This function is mostly a helper function to be called in mp_filter_reads()'''
     #Check that the input filename is a .bam file, and that the output_dir is correctly formatted
@@ -21,29 +21,38 @@ def filter_reads(filepath, output_dir, contig_list=None):
     out_bam = pysam.AlignmentFile(output_dir + output_filename, "wb", template=in_bam)
     filtered_bam = pysam.AlignmentFile(output_dir + filtered_reads_filename, "wb", template=in_bam)
 
-    #Fetch all reads aligned to given contig
-    reads = in_bam.fetch(contig="NR_003278.3")
-    num_reads_filtered = 0
+    # contig_list = ["NR_003278.3"]
+    contig_list = ["18s","28s","5.8s","5s"]
 
-    #Iterate through reads and write out filtered reads to output .bam file
-    try:
-        for count, read in enumerate(reads):
-            #alignment_length = read.query_alignment_length
-            MD = read.get_tag("MD")
-            if (not re.search("[AGCT][\d^]*[AGCT]", MD) and
-                    read.query_alignment_length >= 20 and
-                    read.query_alignment_length == read.reference_length):
-                out_bam.write(read)
-            else:
-                num_reads_filtered += 1
-                filtered_bam.write(read)
-    except:
-        print(filepath)
-        raise
+    for contig in contig_list:
+        #Fetch all reads aligned to given contig. If contig not found in the .bam file, make a note in the log file and continue to the next contig.
+        try:
+            reads = in_bam.fetch(contig=contig)
+        except ValueError:
+            with open(output_dir + filename + ".txt", "a") as file:
+                file.write("Contig " + contig + ": NOT FOUND \n")
+            continue
+        num_reads_filtered = 0
 
-    #Generate run log
-    with open(output_dir+filename+".txt", "w") as file:
-        file.write(str(num_reads_filtered)+" of "+str(count+1)+" ("+str(num_reads_filtered/count*100)+"%) filtered.")
+        #Iterate through reads and write out filtered reads to output .bam file
+        try:
+            for count, read in enumerate(reads):
+                #alignment_length = read.query_alignment_length
+                MD = read.get_tag("MD")
+                if (not re.search("[AGCT][\d^]*[AGCT]", MD) and
+                        read.query_alignment_length >= 20 and
+                        read.query_alignment_length == read.reference_length):
+                    out_bam.write(read)
+                else:
+                    num_reads_filtered += 1
+                    filtered_bam.write(read)
+        except:
+            print(filepath)
+            raise
+
+        #Generate run log, with each line defining the number of filtered reads for each contig.
+        with open(output_dir+filename+".txt", "a") as file:
+            file.write("Contig " + contig + ": " + str(num_reads_filtered)+" of "+str(count+1)+" ("+str(num_reads_filtered/count*100)+"%) filtered. \n")
 
 def mp_filter_reads(input_dir, output_dir):
     '''Sets up a multiprocessing Pool to call the filter_reads() function on an input_dir path containing a number of sorted .bam files'''
