@@ -82,3 +82,22 @@ def extract_contig_names(fasta_filepath):
             fasta_list.append(first_word)
     file.close()
     return fasta_list
+
+from subprocess import Popen
+
+
+def index_filtered_names(filepath):
+    #Split up the filepath to get the name of the file and the directory where it is located.
+    #This information will be used to set up a logfile in the same directory, with the filename
+    path_parts = filepath.split("/")
+    file_name = path_parts[-1]
+    file_directory = filepath.strip(file_name)
+
+    logname= file_directory + "/log." + file_name
+    p = Popen(["samtools", "index", filepath], stderr=open(logname, "w"), stdout=open(logname, "w"))
+    p.wait()
+
+print("starting indexing")
+filepath="/home/DataShare/eclip_pipeline/ENCSR950WBG_SLBP_rep1_sorted.bam"
+index_filtered_names(filepath)
+print("finished indexing")
