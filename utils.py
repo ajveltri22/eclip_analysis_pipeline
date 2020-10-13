@@ -96,8 +96,3 @@ def index_filtered_names(filepath):
     logname= file_directory + "/log." + file_name
     p = Popen(["samtools", "index", filepath], stderr=open(logname, "w"), stdout=open(logname, "w"))
     p.wait()
-
-print("starting indexing")
-filepath="/home/DataShare/eclip_pipeline/ENCSR950WBG_SLBP_rep1_sorted.bam"
-index_filtered_names(filepath)
-print("finished indexing")
