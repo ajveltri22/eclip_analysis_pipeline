@@ -85,7 +85,7 @@ def extract_contig_names(fasta_filepath):
 
 from subprocess import Popen
 
-
+@FunctionWrapperAddQueue()
 def index_filtered_names(filepath):
     #Split up the filepath to get the name of the file and the directory where it is located.
     #This information will be used to set up a logfile in the same directory, with the filename
@@ -93,6 +93,7 @@ def index_filtered_names(filepath):
     file_name = path_parts[-1]
     file_directory = filepath.strip(file_name)
 
-    logname= file_directory + "/log." + file_name
-    p = Popen(["samtools", "index", filepath], stderr=open(logname, "w"), stdout=open(logname, "w"))
+    logname= file_directory + "log." + file_name
+    log = open(logname, "w")
+    p = Popen(["samtools", "index", filepath], stderr=log, stdout=log)
     p.wait()
