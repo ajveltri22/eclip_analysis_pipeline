@@ -32,6 +32,7 @@ class EncodeExperimentDownloader:
     TODO:
     - download barcode for trimming??
     - create txt file with metadata??
+    - rewrite file_info_table as defaultdict? Less readable?
     """
 
     def __init__(self, eclip_encode_accession):

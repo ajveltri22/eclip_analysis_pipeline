@@ -13,7 +13,7 @@ being refactored. `stats_analysis.Rmd` shows the original statistical analysis**
 Multiple cores are encouraged.
 
 ## Software requirements
-- Python 3.6
+- Python 3.7
 - [samtools](http://www.htslib.org/) 1.9
 - [HISAT2](http://daehwankimlab.github.io/hisat2/) 2.1.0
 - gzip 1.6
