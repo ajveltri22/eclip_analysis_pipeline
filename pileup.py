@@ -45,6 +45,11 @@ def get_list_total_reads(directory_path, contig_tuple):
     contig_num_reads_dict[contig] = num_reads_dict
 
 def get_pileup(file_path, contig_tuple):
+    '''Function accepts a .bam file with an associated .bai file, as well as a tuple containing (contig, contig_length).
+    Uses pysam.pileup() to count the number of reads at each nucleotide position of the given contig.
+    Previous code using pysam.count_coverage() did not account for reads with unassigned bases. This implementation solves that.
+    Outputs a tuple containing the filename, the contig used, and the Pandas series of pileup reads
+    '''
     global contig_num_reads_dict
 
     contig, contig_length = contig_tuple
@@ -56,24 +61,25 @@ def get_pileup(file_path, contig_tuple):
     #looks for the sample name in the filename (assumes .bam filename is formatted: samplename_filtered.bam) and only keeps samplename
     sample_name = re.search("(ENCSR[0-9A-Za-z_]*)_filtered.bam$", file_path).group(1)
 
-    #Not sure what this does entirely?
-    pos_depth_list = pd.DataFrame([*samfile.count_coverage(contig, quality_threshold=0, read_callback="nofilter")]).sum().T
+    #this is NOT shitty and did work because samtools.pileup is no longer a fucking mystery.
+    #Max_depth was set arbitrarily to 10000000 to ensure all reads are accounted for.
+    samfile_pileup = samfile.pileup(contig, start=0, end=contig_length+1, quality_threshold=0, read_callback="nofilter",ignore_orphans=False,max_depth=10000000)
 
-    if contig == "18s":
-        print(sample_name)
-        print('----------')
-        for i in range(109, 115):
-            print(i, contig, pos_depth_list[i], num_reads_dict[sample_name], pos_depth_list[i]/num_reads_dict[sample_name]* 10 ** 6)
+    #Generate a list of reads per contig nucleotide position using samfile.pileup iterator + convert to Pandas Series
+    #Check docs for proper way to assess attributes of pileup_column
+    #e.g. pileup_column.nsegments = number of reads at given position
+    #e.g. pileup_column.reference_pos = given nucleotide position in contig
+    pos_depth_list = [(pileup_column.nsegments) for pileup_column in samfile_pileup]
+    pos_depth_list = pd.Series(pos_depth_list)
+
+    #Normalize by dividing reads at each position by the total number of reads after filtering
     if len(pos_depth_list) != 0:
         pos_depth_list = pos_depth_list / num_reads_dict[sample_name] * 10 ** 6
     else:
         pos_depth_list = pd.Series()
-    # print(pos_depth_list)
-    pos_depth_list.name = sample_name
+    pos_depth_list.name = sample_name + "_CONTIG_" + contig
+    print(pos_depth_list)
     return (sample_name, contig, pos_depth_list)
-
-
-
 
 #Defining some global variables used by the functions
 #contig_num_reads_dict = {contig: num_reads_dict}
@@ -84,7 +90,7 @@ contig_num_reads_dict = {}
 # contig_list = ["18s","28s","5.8s","5s"]
 contig_list = fastawork.extract_fasta_info("/Users/lij/PycharmProjects/eclip_analysis_pipeline/hsrRNA.fa").items()
 
-path = "/Users/lij/PycharmProjects/eclip_analysis_pipeline/pileup_test_data"
+path = "/Users/lij/PycharmProjects/eclip_analysis_pipeline/pileup_test_data/TEST copy"
 if not path.endswith('/'):
     path = path + '/'
 
@@ -126,7 +132,7 @@ if not os.path.exists(pileup_output_path):
 for contig, contig_length in contig_list:
     pileup_contig_data = pileup_data[contig]
     pileup_contig_data.fillna(0, inplace=True)
-    output_name = pileup_output_path + contig + "_pileup_table_FIXED" + ".csv"
+    output_name = pileup_output_path + contig + "_pileup_table_PILEUP_pysam_pileup" + ".csv"
     pileup_contig_data.to_csv(output_name)
 
 # map_unzip = list(zip(*map_list))
